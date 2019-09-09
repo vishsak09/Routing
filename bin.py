@@ -1,11 +1,12 @@
 from __future__ import print_function
 
 import math
+import random
 
 from ortools.constraint_solver import pywrapcp
 from ortools.constraint_solver import routing_enums_pb2
 
-demand = [20, 20, 25, 20, 30, 20, 20, 20, 20, 20, ]
+# demand = [20, 20, 25, 20, 30, 20, 20, 20, 20, 20, ]
 distance = [
     [0, 26, 23, 29, 22, 27, 28, 28, 27, 22, 25],
     [24, 0, 4, 5, 10, 13, 12, 5, 10, 8, 6],
@@ -141,7 +142,7 @@ def print_solution(data, manager, routing, assignment, dic):
                 temp.append(search_node(previous_index, dic))
                 temp.append(count_same)
                 route.append(temp)
-                # print(route)
+                print(route)
                 count_same = 1
             route_distance += routing.GetArcCostForVehicle(
                 previous_index, index, vehicle_id)
@@ -149,8 +150,8 @@ def print_solution(data, manager, routing, assignment, dic):
         plan_output += ' {0} Load({1})\n'.format(search_node(manager.IndexToNode(index), dic),
                                                  route_load)
         plan_output += 'Distance of the route: {}m\n'.format(route_distance)
-        if node > 1:
-            print(plan_output)
+        # if node > 1:
+        #     print(plan_output)
         total_distance += route_distance
         total_load += route_load
 
@@ -187,6 +188,8 @@ def main(updated_data):
     # for node in range(1, 7):
     #     routing.AddDisjunction([manager.NodeToIndex(node)], penalty)
 
+
+
     plus_one_callback_index = routing.RegisterUnaryTransitCallback(lambda index: 1)
     count_dimension_name = 'count'
     routing.AddDimension(
@@ -214,6 +217,10 @@ def main(updated_data):
 
 
 if __name__ == '__main__':
-    updated_data = Manipulation(demand, distance)
-    print(updated_data.keys())
-    main(updated_data)
+    for run in range(100):
+        demand = [random.randint(10,30) for i in range(len(distance)-1)]
+        updated_data = Manipulation(demand, distance)
+        print(run)
+        main(updated_data)
+    # print(updated_data.keys())
+    # main(updated_data)

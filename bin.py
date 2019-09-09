@@ -1,10 +1,11 @@
 from __future__ import print_function
-from ortools.constraint_solver import routing_enums_pb2
-from ortools.constraint_solver import pywrapcp
-import math
-import csv
 
-demand = [20,20,20,20,20,20,20,20,20,20]
+import math
+
+from ortools.constraint_solver import pywrapcp
+from ortools.constraint_solver import routing_enums_pb2
+
+demand = [20, 20, 25, 20, 30, 20, 20, 20, 20, 20, ]
 distance = [
     [0, 26, 23, 29, 22, 27, 28, 28, 27, 22, 25],
     [24, 0, 4, 5, 10, 13, 12, 5, 10, 8, 6],
@@ -18,49 +19,103 @@ distance = [
     [23, 9, 6, 11, 3, 8, 8, 10, 6, 0, 7],
     [25, 6, 6, 4, 8, 8, 7, 3, 5, 7, 0],
 ]
-dict_inx = {}
-prev = 0
-for i,d in enumerate(demand):
-    # print(prev)
-    dict_inx.update({i+1:(list(range(prev+1,prev+1+math.floor(d/2))))})
-    prev += math.floor(d/2)
-Manipulated_Demand =[]
-Manipulates_Distance = []
-for i in demand:
-    if i%2 == 0:
-        Manipulated_Demand.extend([2]*math.floor(i/2))
-    else:
-        Manipulated_Demand.extend([2]*(math.floor(i/2)-1))
-        Manipulated_Demand.append(3)
-fc_row = [0]
-for i in range(len(demand)):
-    temp = [0]
-    for j in range(len(demand)):
-        temp.append(distance[i+1][j+1])
-        x = temp[-1]
-        temp.extend([x] * (math.floor(demand[i] / 2)-1))
-    for k in range(math.floor(demand[i] / 2)):
+
+
+def Manipulation(demand, distance):
+    updated = {}
+    Manipulated_Demand = []
+    Manipulates_Distance = []
+    for i in demand:
+        if i % 2 == 0:
+            Manipulated_Demand.extend([2] * math.floor(i / 2))
+        else:
+            Manipulated_Demand.extend([2] * (math.floor(i / 2) - 1))
+            Manipulated_Demand.append(3)
+    Manipulated_Demand.insert(0, 0)
+    updated["Demand"] = Manipulated_Demand
+    dict_inx = {}
+    prev = 0
+    for i, d in enumerate(demand):
+        dict_inx.update({i + 1: (list(range(prev + 1, prev + 1 + math.floor(d / 2))))})
+        prev += math.floor(d / 2)
+    updated["Parent_MDC"] = dict_inx
+    for i in range(1, len(Manipulated_Demand)):
+        temp = [0]
+        row = search_node(i, dict_inx)
+        for j in range(1, len(Manipulated_Demand)):
+            col = search_node(j, dict_inx)
+            temp.append(distance[row][col])
         Manipulates_Distance.append(temp)
-    fc_row.append(distance[0][i+1])
-    x = fc_row[-1]
-    fc_row.extend([x] * (math.floor(demand[i] / 2)-1))
-Manipulates_Distance.insert(0,fc_row)
-Manipulated_Demand.insert(0,0)
-print(dict_inx)
-def search_node(val):
+
+    temp = [0]
+    for i in range(1, len(Manipulated_Demand)):
+        col = search_node(i, dict_inx)
+        temp.append(distance[0][col])
+    Manipulates_Distance.insert(0, temp)
+    updated["Distance"] = Manipulates_Distance
+    updated["Parent_MDC"] = dict_inx
+    return updated
+
+
+def search_node(val, dict_inx):
     for node, node_list in dict_inx.items():
         if val in node_list:
             return node
-def create_data_model():
+
+
+'''
+def Distance_Manipulation(distance, demand):
+
+    Manipulates_Distance =[]
+    print(demand)
+    temp = [0]
+    for i in range(len(demand)):
+        temp = []
+        for j,d in enumerate(demand):
+            for k in range(math.floor(i / 2)):
+                temp.append(distance[i+1][j+1])
+        print(temp)
+        for k in range(math.floor(i / 2)):
+            Manipulates_Distance.append(temp)
+    print(Manipulates_Distance)
+    # return  Manipulates_Distance
+
+fc_row = [0]
+for i in range(len(demand)):
+    temp = [0]
+    for j in range(1,len(demand)):
+        temp.append(distance[i][j])
+        x = temp[-1]
+        temp.extend([x] * (math.floor(demand[i] / 2) - 1))
+    for k in range(math.floor(demand[i] / 2)):
+        Manipulates_Distance.append(temp)
+    fc_row.append(distance[0][i + 1])
+    x = fc_row[-1]
+    fc_row.extend([x] * (math.floor(demand[i] / 2) - 1))
+Manipulates_Distance.insert(0, fc_row)
+Manipulated_Demand.insert(0, 0)
+print(Manipulated_Demand)
+print(len(Manipulated_Demand))
+for i in Manipulates_Distance:
+    print(len(i),",,,,,",i)
+
+def search_node(val):
+    for node, node_list in dict_inx.items():
+        if val in node_list:
+            return node'''
+
+
+def create_data_model(updated_data):
     data = {}
-    data['distance_matrix'] = Manipulates_Distance
+    data['distance_matrix'] = updated_data['Distance']
     data['num_vehicles'] = 50
-    data['demands'] = Manipulated_Demand
-    data['vehicle_capacities'] = [28]*50
+    data['demands'] = updated_data["Demand"]
+    data['vehicle_capacities'] = [28] * 50
     data['depot'] = 0
     return data
 
-def print_solution(data, manager, routing, assignment):
+
+def print_solution(data, manager, routing, assignment, dic):
     total_distance = 0
     total_load = 0
     for vehicle_id in range(data['num_vehicles']):
@@ -69,20 +124,29 @@ def print_solution(data, manager, routing, assignment):
         route_distance = 0
         route_load = 0
         node = 0
-        last = 0
-        last_sum = 0
+        count_same = 1
+        route = []
         while not routing.IsEnd(index):
+            temp = []
             node_index = manager.IndexToNode(index)
             node += 1
             route_load += data['demands'][node_index]
-            plan_output += ' {0} Load({1}) -> '.format(search_node(node_index), route_load)
+            plan_output += ' {0} Load({1}) -> '.format(search_node(node_index, dic), route_load)
             previous_index = index
             index = assignment.Value(routing.NextVar(index))
-            # print(previous_index,index)
+            # print(search_node(previous_index), search_node(index))
+            if search_node(previous_index, dic) == search_node(index, dic) and previous_index is not None:
+                count_same += 1
+            elif previous_index is not None:
+                temp.append(search_node(previous_index, dic))
+                temp.append(count_same)
+                route.append(temp)
+                # print(route)
+                count_same = 1
             route_distance += routing.GetArcCostForVehicle(
                 previous_index, index, vehicle_id)
-            print("....", route_distance, routing.GetArcCostForVehicle(previous_index, index, vehicle_id))
-        plan_output += ' {0} Load({1})\n'.format(search_node(manager.IndexToNode(index)),
+            # print("....", route_distance, routing.GetArcCostForVehicle(previous_index, index, vehicle_id))
+        plan_output += ' {0} Load({1})\n'.format(search_node(manager.IndexToNode(index), dic),
                                                  route_load)
         plan_output += 'Distance of the route: {}m\n'.format(route_distance)
         if node > 1:
@@ -90,8 +154,9 @@ def print_solution(data, manager, routing, assignment):
         total_distance += route_distance
         total_load += route_load
 
-def main():
-    data = create_data_model()
+
+def main(updated_data):
+    data = create_data_model(updated_data)
     manager = pywrapcp.RoutingIndexManager(len(data['distance_matrix']),
                                            data['num_vehicles'], data['depot'])
     routing = pywrapcp.RoutingModel(manager)
@@ -103,13 +168,12 @@ def main():
 
     transit_callback_index = routing.RegisterTransitCallback(distance_callback)
 
-
     routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
-
 
     def demand_callback(from_index):
         from_node = manager.IndexToNode(from_index)
         return data['demands'][from_node]
+
     demand_callback_index = routing.RegisterUnaryTransitCallback(
         demand_callback)
     routing.AddDimensionWithVehicleCapacity(
@@ -123,8 +187,8 @@ def main():
     # for node in range(1, 7):
     #     routing.AddDisjunction([manager.NodeToIndex(node)], penalty)
 
-    plus_one_callback_index = routing.RegisterUnaryTransitCallback(lambda index :1)
-    count_dimension_name='count'
+    plus_one_callback_index = routing.RegisterUnaryTransitCallback(lambda index: 1)
+    count_dimension_name = 'count'
     routing.AddDimension(
         plus_one_callback_index,
         0,
@@ -132,12 +196,11 @@ def main():
         True,
         count_dimension_name
     )
-    count_dimension=routing.GetDimensionOrDie(count_dimension_name)
+    count_dimension = routing.GetDimensionOrDie(count_dimension_name)
 
-
-    for vehicle_idx in range (0,data['num_vehicles']):
-        index=routing.End(vehicle_idx)
-        count_dimension.CumulVar(index).SetRange(0,20)
+    for vehicle_idx in range(0, data['num_vehicles']):
+        index = routing.End(vehicle_idx)
+        count_dimension.CumulVar(index).SetRange(0, 20)
 
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
     search_parameters.first_solution_strategy = (
@@ -146,9 +209,11 @@ def main():
     assignment = routing.SolveWithParameters(search_parameters)
 
     if assignment:
-        print_solution(data, manager, routing, assignment)
+        dic = updated_data['Parent_MDC']
+        print_solution(data, manager, routing, assignment, dic)
 
 
 if __name__ == '__main__':
-    for i in range(100):
-    main()
+    updated_data = Manipulation(demand, distance)
+    print(updated_data.keys())
+    main(updated_data)
